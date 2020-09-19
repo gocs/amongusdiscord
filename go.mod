@@ -9,5 +9,6 @@ require (
 	github.com/joho/godotenv v1.3.0
 	github.com/kbinani/screenshot v0.0.0-20191211154542-3a185f1ce18f
 	github.com/lxn/win v0.0.0-20191128105842-2da648fda5b4 // indirect
-	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd // indirect
+	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a // indirect
+	golang.org/x/sys v0.0.0-20200918174421-af09f7315aff // indirect
 )
