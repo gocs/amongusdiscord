@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - workflow-1
 
 jobs:
   lint:
