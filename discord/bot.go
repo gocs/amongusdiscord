@@ -417,7 +417,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					resp := playerListResponse()
 					_, err := s.ChannelMessageSend(m.ChannelID, resp)
 					log.Println("error couldn't send message (perhaps invalid channel ID),", err)
-					break
 				case "reset":
 					fallthrough
 				case "r":
@@ -430,7 +429,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					VoiceStatusCacheLock.Unlock()
 					_, err := s.ChannelMessageSend(m.ChannelID, "Reset Player List!")
 					log.Println("error couldn't send 'Reset Player List!' message (perhaps invalid channel ID),", err)
-					break
 				case "dead":
 					fallthrough
 				case "d":
@@ -447,7 +445,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						_, err := s.ChannelMessageSend(m.ChannelID, buf.String())
 						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
-					break
 				case "alive":
 					fallthrough
 				case "al":
