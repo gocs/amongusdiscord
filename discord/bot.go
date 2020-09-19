@@ -3,8 +3,6 @@ package discord
 import (
 	"bytes"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
-	"github.com/denverquane/amongusdiscord/capture"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +10,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/denverquane/amongusdiscord/capture"
 )
 
 const AmongUsDefaultName = "Player"
@@ -60,7 +61,7 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 	ExclusiveChannelId = channel
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
-		fmt.Println("error creating Discord session,", err)
+		log.Println("error creating Discord session,", err)
 		return
 	}
 
@@ -72,9 +73,8 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 
 	//Open a websocket connection to Discord and begin listening.
 	err = dg.Open()
-
 	if err != nil {
-		fmt.Println("error opening connection,", err)
+		log.Println("error opening connection,", err)
 		return
 	}
 
@@ -84,6 +84,10 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 
 	mems, err := dg.GuildMembers(guild, "", 1000)
+	if err != nil {
+		log.Println("error getting guild members,", err)
+	}
+
 	VoiceStatusCacheLock.Lock()
 	for _, v := range mems {
 		VoiceStatusCache[v.User.ID] = UserData{
@@ -103,7 +107,8 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 	VoiceStatusCacheLock.Unlock()
 
 	if channel != "" {
-		dg.ChannelMessageSend(channel, "Bot is Online!")
+		_, err = dg.ChannelMessageSend(channel, "Bot is Online!")
+		log.Println("error sending 'Bot is Online!' message (perhaps invalid channel ID),", err)
 	}
 
 	go discordListener(dg, guild, results)
@@ -115,20 +120,23 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 		}
 	
 		resp := processTrackChannelArg(defaultChannel, channels)
-		dg.ChannelMessageSend(channel, resp)
+		_, err = dg.ChannelMessageSend(channel, resp)
+		log.Println("error sending message with response (perhaps invalid channel ID),", err)
 	}
 	
 
 	<-sc
 
 	if channel != "" {
-		dg.ChannelMessageSend(channel, "Bot is going Offline!")
+		_, err = dg.ChannelMessageSend(channel, "Bot is going Offline!")
+		log.Println("error sending 'Bot is going Offline!' message (perhaps invalid channel ID),", err)
 	}
 
 	//kill the worker before we terminate the worker forcibly
 	results <- capture.KILL
 
-	dg.Close()
+	err = dg.Close()
+	log.Println("error closing discord session,", err)
 }
 
 func discordListener(dg *discordgo.Session, guild string, res <-chan capture.GameState) {
@@ -139,7 +147,8 @@ func discordListener(dg *discordgo.Session, guild string, res <-chan capture.Gam
 			return
 		case capture.PREGAME:
 			if ExclusiveChannelId != "" {
-				dg.ChannelMessageSend(ExclusiveChannelId, fmt.Sprintf("Game over! Unmuting players!"))
+				_, err := dg.ChannelMessageSend(ExclusiveChannelId, fmt.Sprintf("Game over! Unmuting players!"))
+				log.Println("error sending 'Game over! Unmuting players!' message (perhaps invalid channel ID),", err)
 			}
 			//Loop through and reset players (game over = everyone alive again)
 			VoiceStatusCacheLock.Lock()
@@ -161,7 +170,8 @@ func discordListener(dg *discordgo.Session, guild string, res <-chan capture.Gam
 				delay = GameResumeDelay
 			}
 			if ExclusiveChannelId != "" {
-				dg.ChannelMessageSend(ExclusiveChannelId, fmt.Sprintf("Game starting; muting players in %d second(s)!", delay))
+				_, err := dg.ChannelMessageSend(ExclusiveChannelId, fmt.Sprintf("Game starting; muting players in %d second(s)!", delay))
+				log.Println("error sending 'Game starting; muting players in n second(s)!' message (perhaps invalid channel ID),", err)
 			}
 			GameStateLock.RUnlock()
 
@@ -173,7 +183,8 @@ func discordListener(dg *discordgo.Session, guild string, res <-chan capture.Gam
 			GameStateLock.Unlock()
 		case capture.DISCUSS:
 			if ExclusiveChannelId != "" {
-				dg.ChannelMessageSend(ExclusiveChannelId, fmt.Sprintf("Starting discussion; unmuting alive players in %d second(s)!", DiscussStartDelay))
+				_, err := dg.ChannelMessageSend(ExclusiveChannelId, fmt.Sprintf("Starting discussion; unmuting alive players in %d second(s)!", DiscussStartDelay))
+				log.Println("error sending 'Starting discussion; unmuting alive players in n second(s)!' message (perhaps invalid channel ID),", err)
 			}
 			time.Sleep(time.Second * time.Duration(DiscussStartDelay))
 			GameStateLock.Lock()
@@ -252,7 +263,8 @@ func voiceStateChange(s *discordgo.Session, m *discordgo.VoiceStateUpdate) {
 		//unmute the member if they left the chat while muted
 		if !v.tracking && m.Mute {
 			log.Println("Untracked mute")
-			guildMemberMute(s, m.GuildID, m.UserID, false)
+			err := guildMemberMute(s, m.GuildID, m.UserID, false)
+			log.Println("error couldn't unmute member,", err)
 
 			//if the user rejoins, only mute if the game is going, or if it's discussion and they're dead
 		} else {
@@ -260,7 +272,8 @@ func voiceStateChange(s *discordgo.Session, m *discordgo.VoiceStateUpdate) {
 			if v.tracking && !m.Mute && (GameState == capture.GAME || (GameState == capture.DISCUSS && !v.amongUsAlive)) {
 				log.Println("Tracked mute")
 				log.Printf("Current game state: %d, alive: %v", GameState, v.amongUsAlive)
-				guildMemberMute(s, m.GuildID, m.UserID, true)
+				err := guildMemberMute(s, m.GuildID, m.UserID, true)
+				log.Println("error couldn't mute member,", err)
 			}
 			GameStateLock.RUnlock()
 		}
@@ -355,27 +368,31 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				args[i] = strings.ToLower(v)
 			}
 			if len(args) == 0 {
-				s.ChannelMessageSend(m.ChannelID, helpResponse())
+				_, err := s.ChannelMessageSend(m.ChannelID, helpResponse())
+				log.Println("error couldn't print help (perhaps invalid channel ID),", err)
 			} else {
 				switch args[0] {
 				case "help":
 					fallthrough
 				case "h":
-					s.ChannelMessageSend(m.ChannelID, helpResponse())
+					_, err := s.ChannelMessageSend(m.ChannelID, helpResponse())
+					log.Println("error couldn't print help (perhaps invalid channel ID),", err)
 					break
 				case "add":
 					fallthrough
 				case "a":
 					if len(args[1:]) == 0 {
 						//TODO print usage of this command specifically
-						s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						_, err := s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						log.Println("error couldn't print help (perhaps invalid channel ID),", err)
 					} else {
 						responses := processAddUsersArgs(args[1:])
 						buf := bytes.NewBuffer([]byte("Results:\n"))
 						for name, msg := range responses {
 							buf.WriteString(fmt.Sprintf("`%s`: %s\n", name, msg))
 						}
-						s.ChannelMessageSend(m.ChannelID, buf.String())
+						_, err := s.ChannelMessageSend(m.ChannelID, buf.String())
+						log.Println("error couldn't print help (perhaps invalid channel ID),", err)
 					}
 					break
 				case "track":
@@ -383,7 +400,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				case "t":
 					if len(args[1:]) == 0 {
 						//TODO print usage of this command specifically
-						s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						_, err := s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						log.Println("error couldn't print help (perhaps invalid channel ID),", err)
 					} else {
 						channelName := strings.Join(args[1:], " ")
 
@@ -393,14 +411,16 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						}
 
 						resp := processTrackChannelArg(channelName, channels)
-						s.ChannelMessageSend(m.ChannelID, resp)
+						_, err := s.ChannelMessageSend(m.ChannelID, resp)
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
 					break
 				case "list":
 					fallthrough
 				case "l":
 					resp := playerListResponse()
-					s.ChannelMessageSend(m.ChannelID, resp)
+					_, err := s.ChannelMessageSend(m.ChannelID, resp)
+					log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					break
 				case "reset":
 					fallthrough
@@ -412,21 +432,24 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						VoiceStatusCache[i] = v
 					}
 					VoiceStatusCacheLock.Unlock()
-					s.ChannelMessageSend(m.ChannelID, "Reset Player List!")
+					_, err := s.ChannelMessageSend(m.ChannelID, "Reset Player List!")
+					log.Println("error couldn't send 'Reset Player List!' message (perhaps invalid channel ID),", err)
 					break
 				case "dead":
 					fallthrough
 				case "d":
 					if len(args[1:]) == 0 {
 						//TODO print usage of this command specifically
-						s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						_, err := s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					} else {
 						responses := processMarkAliveUsers(s, m.GuildID, args[1:], false)
 						buf := bytes.NewBuffer([]byte("Results:\n"))
 						for name, msg := range responses {
 							buf.WriteString(fmt.Sprintf("`%s`: %s\n", name, msg))
 						}
-						s.ChannelMessageSend(m.ChannelID, buf.String())
+						_, err := s.ChannelMessageSend(m.ChannelID, buf.String())
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
 					break
 				case "alive":
@@ -434,20 +457,23 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				case "al":
 					if len(args[1:]) == 0 {
 						//TODO print usage of this command specifically
-						s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						_, err := s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					} else {
 						responses := processMarkAliveUsers(s, m.GuildID, args[1:], true)
 						buf := bytes.NewBuffer([]byte("Results:\n"))
 						for name, msg := range responses {
 							buf.WriteString(fmt.Sprintf("`%s`: %s\n", name, msg))
 						}
-						s.ChannelMessageSend(m.ChannelID, buf.String())
+						_, err := s.ChannelMessageSend(m.ChannelID, buf.String())
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
 					break
 				case "unmuteall":
 					fallthrough
 				case "ua":
-					s.ChannelMessageSend(m.ChannelID, "Forcibly unmuting ALL players!")
+					_, err := s.ChannelMessageSend(m.ChannelID, "Forcibly unmuting ALL players!")
+					log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					VoiceStatusCacheLock.RLock()
 					for id, _ := range VoiceStatusCache {
 						err := guildMemberMute(s, m.GuildID, id, false)
@@ -460,7 +486,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				case "muteall":
 					fallthrough
 				case "ma":
-					s.ChannelMessageSend(m.ChannelID, "Forcibly muting ALL players!")
+					_, err := s.ChannelMessageSend(m.ChannelID, "Forcibly muting ALL players!")
+					log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					VoiceStatusCacheLock.RLock()
 					for id, _ := range VoiceStatusCache {
 						err := guildMemberMute(s, m.GuildID, id, true)
@@ -478,13 +505,15 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				case "b":
 					if len(args[1:]) == 0 {
 						//TODO print usage of this command specifically
-						s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						_, err := s.ChannelMessageSend(m.ChannelID, "You used this command incorrectly! Please refer to `.au help` for proper command usage")
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					} else {
 						str, err := processBroadcastArgs(args[1:])
 						if err != nil {
 							log.Println(err)
 						}
-						s.ChannelMessageSend(m.ChannelID, str)
+						_, err := s.ChannelMessageSend(m.ChannelID, str)
+						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
 				}
 			}
