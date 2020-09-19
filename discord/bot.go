@@ -461,7 +461,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						_, err := s.ChannelMessageSend(m.ChannelID, buf.String())
 						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
-					break
 				case "unmuteall":
 					fallthrough
 				case "ua":
@@ -475,7 +474,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						}
 					}
 					VoiceStatusCacheLock.RUnlock()
-					break
 				case "muteall":
 					fallthrough
 				case "ma":
@@ -490,7 +488,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 					}
 					VoiceStatusCacheLock.RUnlock()
-					break
 				case "broadcast":
 					fallthrough
 				case "bcast":
