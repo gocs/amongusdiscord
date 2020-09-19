@@ -411,7 +411,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						}
 
 						resp := processTrackChannelArg(channelName, channels)
-						_, err := s.ChannelMessageSend(m.ChannelID, resp)
+						_, err = s.ChannelMessageSend(m.ChannelID, resp)
 						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
 					break
@@ -512,7 +512,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						if err != nil {
 							log.Println(err)
 						}
-						_, err := s.ChannelMessageSend(m.ChannelID, str)
+						_, err = s.ChannelMessageSend(m.ChannelID, str)
 						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
 				}
