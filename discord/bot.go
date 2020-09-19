@@ -81,7 +81,7 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 	// Wait here until CTRL-C or other term signal is received.
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, syscall.SIGTERM)
 
 	mems, err := dg.GuildMembers(guild, "", 1000)
 	if err != nil {
@@ -113,17 +113,16 @@ func MakeAndStartBot(token, guild, channel string, results chan capture.GameStat
 
 	go discordListener(dg, guild, results)
 
-	if defaultChannel != ""{
+	if defaultChannel != "" {
 		channels, err := dg.GuildChannels(guild)
 		if err != nil {
 			log.Println(err)
 		}
-	
+
 		resp := processTrackChannelArg(defaultChannel, channels)
 		_, err = dg.ChannelMessageSend(channel, resp)
 		log.Println("error sending message with response (perhaps invalid channel ID),", err)
 	}
-	
 
 	<-sc
 
@@ -377,7 +376,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				case "h":
 					_, err := s.ChannelMessageSend(m.ChannelID, helpResponse())
 					log.Println("error couldn't print help (perhaps invalid channel ID),", err)
-					break
 				case "add":
 					fallthrough
 				case "a":
@@ -394,7 +392,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						_, err := s.ChannelMessageSend(m.ChannelID, buf.String())
 						log.Println("error couldn't print help (perhaps invalid channel ID),", err)
 					}
-					break
 				case "track":
 					fallthrough
 				case "t":
@@ -414,7 +411,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 						_, err = s.ChannelMessageSend(m.ChannelID, resp)
 						log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					}
-					break
 				case "list":
 					fallthrough
 				case "l":
@@ -475,7 +471,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					_, err := s.ChannelMessageSend(m.ChannelID, "Forcibly unmuting ALL players!")
 					log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					VoiceStatusCacheLock.RLock()
-					for id, _ := range VoiceStatusCache {
+					for id := range VoiceStatusCache {
 						err := guildMemberMute(s, m.GuildID, id, false)
 						if err != nil {
 							log.Println(err)
@@ -489,7 +485,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					_, err := s.ChannelMessageSend(m.ChannelID, "Forcibly muting ALL players!")
 					log.Println("error couldn't send message (perhaps invalid channel ID),", err)
 					VoiceStatusCacheLock.RLock()
-					for id, _ := range VoiceStatusCache {
+					for id := range VoiceStatusCache {
 						err := guildMemberMute(s, m.GuildID, id, true)
 						if err != nil {
 							log.Println(err)
@@ -642,7 +638,7 @@ func processMarkAliveUsers(dg *discordgo.Session, guildID string, args []string,
 
 func processTrackChannelArg(channelName string, allChannels []*discordgo.Channel) string {
 	for _, c := range allChannels {
-		if (strings.ToLower(c.Name) == strings.ToLower(channelName) || c.ID == channelName) && c.Type == 2 {
+		if (strings.EqualFold(c.Name, channelName) || c.ID == channelName) && c.Type == 2 {
 			TrackingVoiceId = c.ID
 			TrackingVoiceName = c.Name
 			return fmt.Sprintf("Now tracking \"%s\" Voice Channel for Automute!", c.Name)
